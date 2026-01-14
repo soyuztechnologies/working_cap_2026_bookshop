@@ -4,7 +4,6 @@ version: 1.0.0
 description: "A simple CAP project."
 parameters:
   enable-parallel-deployments: true
-  deploy_mode: html5-repo
 build-parameters:
   before-all:
     - builder: custom
@@ -38,8 +37,6 @@ modules:
       - name: app-api
         properties:
           SUBSCRIPTION_URL: ~{app-protocol}://\${tenant_subdomain}-~{app-uri}
-      - name: bookshop-html5-runtime
-      - name: bookshop-html5-repo-host
     build-parameters:
       builder: npm-ci
     parameters:
@@ -61,13 +58,14 @@ modules:
       - name: mtx-api
         properties:
           mtx-url: ${default-url}
+
   - name: bookshop
-    type: approuter.nodejs
-    path: app/router
+    type: nodejs
+    path: app
     parameters:
       keep-existing-routes: true
-      disk-quota: 256M
-      memory: 256M
+      disk-quota: 1024M
+      memory: 1024M
     properties:
       TENANT_HOST_PATTERN: "^(.*)-${default-uri}"
     requires:
@@ -83,89 +81,11 @@ modules:
           name: mtx-api # must be used in xs-app.json as well
           url: ~{mtx-url}
       - name: bookshop-auth
-      - name: bookshop-html5-runtime
     provides:
       - name: app-api
         properties:
           app-protocol: ${protocol}
           app-uri: ${default-uri}
-
-  - name: bookshop-app-deployer
-    type: com.sap.application.content
-    path: gen
-    requires:
-      - name: bookshop-auth
-      - name: srv-api
-      - name: bookshop-html5-repo-host
-        parameters:
-          content-target: true
-          config:
-            HTML5Runtime_enabled: true
-    build-parameters:
-      build-result: app/
-      requires:
-        - name: bookshopadminauthors
-          artifacts:
-            - admin-authors.zip
-          target-path: app/
-        - name: bookshopadminbooks
-          artifacts:
-            - admin-books.zip
-          target-path: app/
-        - name: bookshopbrowse
-          artifacts:
-            - browse.zip
-          target-path: app/
-        - name: bookshopgenres
-          artifacts:
-            - genres.zip
-          target-path: app/
-
-  - name: bookshopadminauthors
-    type: html5
-    path: app/admin-authors
-    build-parameters:
-      build-result: dist
-      builder: custom
-      commands:
-        - npm ci
-        - npm run build
-      supported-platforms:
-        []
-  - name: bookshopadminbooks
-    type: html5
-    path: app/admin-books
-    build-parameters:
-      build-result: dist
-      builder: custom
-      commands:
-        - npm ci
-        - npm run build
-      supported-platforms:
-        []
-  - name: bookshopbrowse
-    type: html5
-    path: app/browse
-    build-parameters:
-      build-result: dist
-      builder: custom
-      commands:
-        - npm ci
-        - npm run build
-      supported-platforms:
-        []
-  - name: bookshopgenres
-    type: html5
-    path: app/genres
-    build-parameters:
-      build-result: dist
-      builder: custom
-      commands:
-        - npm ci
-        - npm run build
-      supported-platforms:
-        []
-
 
 resources:
   - name: bookshop-auth
@@ -215,14 +135,3 @@ resources:
           onUnSubscriptionAsync: true
           onUpdateDependenciesAsync: true
           callbackTimeoutMillis: 300000 # Increase if your deployments are taking longer than that
-
-  - name: bookshop-html5-repo-host
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: html5-apps-repo
-      service-plan: app-host
-  - name: bookshop-html5-runtime
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: html5-apps-repo
-      service-plan: app-runtime
