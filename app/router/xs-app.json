@@ -1,0 +1,34 @@
+{
+  "welcomeFile": "admin-books/admin-books.html",
+  "routes": [
+    {
+        "source": "^/admin-books/webapp/(.*)",
+        "target": "$1",
+        "localDir": "admin-books/webapp/",
+        "authenticationType": "xsuaa"
+    },
+    {
+        "source": "^/admin-authors/webapp/(.*)",
+        "target": "$1",
+        "localDir": "admin-authors/webapp/",
+        "authenticationType": "xsuaa"
+    },
+    {
+        "source": "^/browse/webapp/(.*)",
+        "target": "$1",
+        "localDir": "browse/webapp/",
+        "authenticationType": "xsuaa"
+    },
+    {
+      "source": "^/-/cds/.*",
+      "destination": "mtx-api",
+      "authenticationType": "none"
+    },
+    {
+      "source": "^/(.*)$",
+      "target": "$1",
+      "destination": "srv-api",
+      "csrfProtection": true
+    }
+  ]
+}
