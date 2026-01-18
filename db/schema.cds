@@ -5,6 +5,8 @@ using {
   sap
 } from '@sap/cds/common';
 
+using {  Attachments } from '@cap-js/attachments';
+
 namespace sap.capire.bookshop;
 
 entity Books : managed {
@@ -16,6 +18,7 @@ entity Books : managed {
       stock    : Integer;
       price    : Price;
       currency : Currency;
+      attachments : Composition of many Attachments;
 }
 
 entity Authors : managed {

@@ -1,5 +1,6 @@
 {
-  "welcomeFile": "admin-books/admin-books.html",
+  "welcomeFile": "admin-books/webapp/admin-books.html",
+  "authenticationMethod": "route",
   "routes": [
     {
         "source": "^/admin-books/webapp/(.*)",

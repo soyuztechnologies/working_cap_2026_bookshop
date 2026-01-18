@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A simple CAP project.",
   "dependencies": {
+    "@cap-js/attachments": "^3.6.1",
     "@cap-js/hana": "^2",
     "@sap/cds": "^9",
     "@sap/cds-mtxs": "^3",
