@@ -1,137 +1,183 @@
 _schema-version: 3.3.0
 ID: bookshop
+description: A simple CAP project.
 version: 1.0.0
-description: "A simple CAP project."
+modules:
+- name: bookshop-srv
+  type: nodejs
+  path: gen/srv
+  requires:
+  - name: bookshop-auth
+  - name: bookshop-db
+  provides:
+  - name: srv-api
+    properties:
+      srv-url: ${default-url}
+  parameters:
+    buildpack: nodejs_buildpack
+    instances: 1
+  build-parameters:
+    builder: npm-ci
+- name: bookshop-mtx
+  type: nodejs
+  path: gen/mtx/sidecar
+  requires:
+  - name: bookshop-auth
+  - name: bookshop-db
+  - name: bookshop-registry
+  - name: app-api
+    properties:
+      SUBSCRIPTION_URL: ~{app-protocol}://\${tenant_subdomain}-~{app-uri}
+  provides:
+  - name: mtx-api
+    properties:
+      mtx-url: ${default-url}
+  parameters:
+    disk-quota: 512M
+    instances: 1
+    memory: 256M
+  build-parameters:
+    builder: npm-ci
+  hooks:
+  - name: upgrade-all
+    type: task
+    phases:
+    - blue-green.application.before-start.idle
+    - deploy.application.before-start
+    parameters:
+      command: cds-mtx upgrade '*'
+      disk-quota: 768M
+      memory: 512M
+      name: upgrade
+- name: bookshop
+  type: nodejs
+  path: app
+  properties:
+    TENANT_HOST_PATTERN: ^(.*)-${default-uri}
+  requires:
+  - name: srv-api
+    group: destinations
+    properties:
+      forwardAuthToken: true
+      name: srv-api
+      url: ~{srv-url}
+  - name: mtx-api
+    group: destinations
+    properties:
+      name: mtx-api
+      url: ~{mtx-url}
+  - name: bookshop-auth
+  provides:
+  - name: app-api
+    properties:
+      app-protocol: ${protocol}
+      app-uri: ${default-uri}
+  parameters:
+    disk-quota: 1024M
+    keep-existing-routes: true
+    memory: 1024M
+- name: bookshop-app-content
+  type: com.sap.application.content
+  path: .
+  requires:
+  - name: bookshop-repo-host
+    parameters:
+      content-target: true
+  build-parameters:
+    build-result: resources
+    requires:
+    - artifacts:
+      - analyticapp.zip
+      name: analyticapp
+      target-path: resources/
+- name: analyticapp
+  type: html5
+  path: app/analyticapp
+  build-parameters:
+    build-result: dist
+    builder: custom
+    commands:
+    - npm install
+    - npm run build:cf
+    supported-platforms: []
+resources:
+- name: bookshop-auth
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      oauth2-configuration:
+        credential-types:
+        - binding-secret
+        - x509
+        redirect-uris:
+        - https://*~{app-api/app-uri}/**
+      role-collections:
+      - description: generated
+        name: admin (bookshop ${org}-${space})
+        role-template-references:
+        - $XSAPPNAME.admin
+      tenant-mode: shared
+      xsappname: bookshop-${org}-${space}
+    path: ./xs-security.json
+    service: xsuaa
+    service-plan: application
+  requires:
+  - name: app-api
+- name: bookshop-db
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: service-manager
+    service-plan: container
+- name: bookshop-registry
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      appName: bookshop-${org}-${space}
+      appUrls:
+        callbackTimeoutMillis: 300000
+        getDependencies: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/dependencies
+        onSubscription: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/tenant/{tenantId}
+        onSubscriptionAsync: true
+        onUnSubscriptionAsync: true
+        onUpdateDependenciesAsync: true
+      category: Category
+      description: A simple CAP project.
+      displayName: bookshop
+      xsappname: bookshop-${org}-${space}
+    service: saas-registry
+    service-plan: application
+  requires:
+  - name: mtx-api
+- name: bookshop-repo-host
+  type: org.cloudfoundry.managed-service
+  parameters:
+    service: html5-apps-repo
+    service-name: bookshop-html5-service
+    service-plan: app-host
+- name: bookshop-destination-service
+  type: org.cloudfoundry.managed-service
+  parameters:
+    config:
+      HTML5Runtime_enabled: false
+      init_data:
+        instance:
+          destinations:
+          - Authentication: NoAuthentication
+            Name: ui5
+            ProxyType: Internet
+            Type: HTTP
+            URL: https://ui5.sap.com
+          existing_destinations_policy: update
+      version: 1.0.0
+    service: destination
+    service-name: bookshop-destination-service
+    service-plan: lite
 parameters:
+  deploy_mode: html5-repo
   enable-parallel-deployments: true
 build-parameters:
   before-all:
-    - builder: custom
-      commands:
-        - npm ci
-        - npx cds build --production
-modules:
-  - name: bookshop-srv
-    type: nodejs
-    path: gen/srv
-    parameters:
-      instances: 1
-      buildpack: nodejs_buildpack
-    build-parameters:
-      builder: npm-ci
-    provides:
-      - name: srv-api # required by consumers of CAP services (e.g. approuter)
-        properties:
-          srv-url: ${default-url}
-    requires:
-      - name: bookshop-auth
-      - name: bookshop-db
-
-  - name: bookshop-mtx
-    type: nodejs
-    path: gen/mtx/sidecar
-    requires:
-      - name: bookshop-auth
-      - name: bookshop-db
-      - name: bookshop-registry
-      - name: app-api
-        properties:
-          SUBSCRIPTION_URL: ~{app-protocol}://\${tenant_subdomain}-~{app-uri}
-    build-parameters:
-      builder: npm-ci
-    parameters:
-      instances: 1
-      memory: 256M
-      disk-quota: 512M
-    hooks:
-      - name: upgrade-all
-        type: task
-        phases:
-          - blue-green.application.before-start.idle
-          - deploy.application.before-start
-        parameters:
-          name: upgrade
-          memory: 512M # increase as required
-          disk-quota: 768M # increase as required
-          command: cds-mtx upgrade '*'
-    provides:
-      - name: mtx-api
-        properties:
-          mtx-url: ${default-url}
-
-  - name: bookshop
-    type: nodejs
-    path: app
-    parameters:
-      keep-existing-routes: true
-      disk-quota: 1024M
-      memory: 1024M
-    properties:
-      TENANT_HOST_PATTERN: "^(.*)-${default-uri}"
-    requires:
-      - name: srv-api
-        group: destinations
-        properties:
-          name: srv-api # must be used in xs-app.json as well
-          url: ~{srv-url}
-          forwardAuthToken: true
-      - name: mtx-api
-        group: destinations
-        properties:
-          name: mtx-api # must be used in xs-app.json as well
-          url: ~{mtx-url}
-      - name: bookshop-auth
-    provides:
-      - name: app-api
-        properties:
-          app-protocol: ${protocol}
-          app-uri: ${default-uri}
-
-resources:
-  - name: bookshop-auth
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: xsuaa
-      service-plan: application
-      path: ./xs-security.json
-      config:
-        xsappname: bookshop-${org}-${space}
-        tenant-mode: shared
-        oauth2-configuration:
-          credential-types:
-            - "binding-secret"
-            - "x509"
-          redirect-uris:
-            - https://*~{app-api/app-uri}/**
-        role-collections:
-          - name: 'admin (bookshop ${org}-${space})'
-            description: 'generated'
-            role-template-references:
-              - '$XSAPPNAME.admin'
-    requires:
-      - name: app-api
-  - name: bookshop-db
-    type: org.cloudfoundry.managed-service
-    parameters:
-      service: service-manager
-      service-plan: container
-  - name: bookshop-registry
-    type: org.cloudfoundry.managed-service
-    requires:
-      - name: mtx-api
-    parameters:
-      service: saas-registry
-      service-plan: application
-      config:
-        xsappname: bookshop-${org}-${space}
-        appName: bookshop-${org}-${space}
-        displayName: bookshop
-        description: A simple CAP project.
-        category: 'Category'
-        appUrls:
-          getDependencies: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/dependencies
-          onSubscription: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/tenant/{tenantId}
-          onSubscriptionAsync: true
-          onUnSubscriptionAsync: true
-          onUpdateDependenciesAsync: true
-          callbackTimeoutMillis: 300000 # Increase if your deployments are taking longer than that
+  - builder: custom
+    commands:
+    - npm ci
+    - npx cds build --production

@@ -1,0 +1,1 @@
+using AnalyticService as service from '../../srv/analytic-service';
